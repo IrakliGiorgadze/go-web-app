@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/IrakliGiorgadze/go-web-app/controllers"
+	"github.com/IrakliGiorgadze/go-web-app/models"
 	"github.com/IrakliGiorgadze/go-web-app/templates"
 	"github.com/IrakliGiorgadze/go-web-app/views"
 
@@ -33,13 +36,38 @@ func main() {
 		"faq.gohtml", "tailwind.gohtml",
 	))))
 
-	usersC := controllers.Users{}
+	cfg := models.DefaultPostgresConfig()
+	db, err := models.Open(cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func(db *sql.DB) {
+		err = db.Close()
+		if err != nil {
+			log.Println("Cannot close DB connection", err)
+		}
+	}(db)
+
+	userService := models.UserService{
+		DB: db,
+	}
+
+	usersC := controllers.Users{
+		UserService: &userService,
+	}
 	usersC.Templates.New = views.Must(views.ParseFS(
 		templates.FS,
 		"signup.gohtml", "tailwind.gohtml",
 	))
+	usersC.Templates.SignIn = views.Must(views.ParseFS(
+		templates.FS,
+		"signin.gohtml", "tailwind.gohtml",
+	))
 	r.Get("/signup", usersC.New)
 	r.Post("/signup", usersC.Create)
+	r.Get("/signin", usersC.SignIn)
+	r.Post("/signin", usersC.ProcessSignIn)
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Page not found", http.StatusNotFound)
