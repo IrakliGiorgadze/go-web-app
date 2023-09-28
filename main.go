@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/IrakliGiorgadze/go-web-app/controllers"
+	"github.com/IrakliGiorgadze/go-web-app/migrations"
 	"github.com/IrakliGiorgadze/go-web-app/models"
 	"github.com/IrakliGiorgadze/go-web-app/templates"
 	"github.com/IrakliGiorgadze/go-web-app/views"
@@ -38,6 +39,7 @@ func main() {
 	))))
 
 	cfg := models.DefaultPostgresConfig()
+	//fmt.Println(cfg)
 	db, err := models.Open(cfg)
 	if err != nil {
 		panic(err)
@@ -49,6 +51,11 @@ func main() {
 			log.Println("Cannot close DB connection", err)
 		}
 	}(db)
+
+	err = models.MigrateFS(db, migrations.FS, ".")
+	if err != nil {
+		panic(err)
+	}
 
 	userService := models.UserService{
 		DB: db,
