@@ -2,6 +2,7 @@ package views
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -14,6 +15,10 @@ import (
 
 	"github.com/gorilla/csrf"
 )
+
+type public interface {
+	Public() string
+}
 
 type Template struct {
 	htmlTpl *template.Template
@@ -30,11 +35,7 @@ func ParseFS(fs fs.FS, patterns ...string) (Template, error) {
 				return "", fmt.Errorf("currentUser not implemented")
 			},
 			"errors": func() []string {
-				return []string{
-					"Don't do that!",
-					"The email address you provided is already associated with an account",
-					"Something went wrong",
-				}
+				return nil
 			},
 		},
 	)
@@ -49,13 +50,15 @@ func ParseFS(fs fs.FS, patterns ...string) (Template, error) {
 	}, nil
 }
 
-func (t Template) Execute(w http.ResponseWriter, r *http.Request, data any) {
+func (t Template) Execute(w http.ResponseWriter, r *http.Request, data any, errs ...error) {
 	tpl, err := t.htmlTpl.Clone()
 	if err != nil {
 		log.Printf("cloning template: %v", err)
 		http.Error(w, "There was an error rendering the page.", http.StatusInternalServerError)
 		return
 	}
+
+	errMsgs := errMessages(errs...)
 
 	tpl = tpl.Funcs(
 		template.FuncMap{
@@ -64,6 +67,9 @@ func (t Template) Execute(w http.ResponseWriter, r *http.Request, data any) {
 			},
 			"currentUser": func() *models.User {
 				return context.User(r.Context())
+			},
+			"errors": func() []string {
+				return errMsgs
 			},
 		},
 	)
@@ -80,6 +86,20 @@ func (t Template) Execute(w http.ResponseWriter, r *http.Request, data any) {
 	}
 
 	_, _ = io.Copy(w, &buf)
+}
+
+func errMessages(errs ...error) []string {
+	var msgs []string
+	for _, err := range errs {
+		var pubErr public
+		if errors.As(err, &pubErr) {
+			msgs = append(msgs, pubErr.Public())
+		} else {
+			msgs = append(msgs, "Something went wrong")
+		}
+	}
+
+	return msgs
 }
 
 func Must(t Template, err error) Template {
