@@ -4,3 +4,4 @@
 .env
 images/
 web-app
+node_modules/
